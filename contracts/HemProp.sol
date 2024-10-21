@@ -14,9 +14,9 @@ constructor(uint256 _pct) ERC721 ('HemProperty', 'Hpt') {
 
 
     using Counters for Counters.Counter;
-    Counter.Counter private _totalProperties;
-    Counter.Counter private _totalSales;
-    Counter.Counter private _totalReviews;
+    Counters.Counter private _totalProperties;
+    Counters.Counter private _totalSales;
+    Counters.Counter private _totalReviews;
 
     struct PropertyStruct {
         uint256 id;
@@ -25,6 +25,7 @@ constructor(uint256 _pct) ERC721 ('HemProperty', 'Hpt') {
         string image;
         string category;
         string description;
+        string location;
         uint256 price;
         bool sold;
         bool deleted;
@@ -33,8 +34,9 @@ constructor(uint256 _pct) ERC721 ('HemProperty', 'Hpt') {
     struct ReviewStruct {
         uint256 id;
         uint256 propertyId;
-        string comment;       
+        string comment;    
         address reviewer;
+        bool deleted;
     }
 
     struct SaleStruct {
@@ -48,12 +50,13 @@ constructor(uint256 _pct) ERC721 ('HemProperty', 'Hpt') {
     mapping (uint256 => ReviewStruct[]) reviews;
     mapping (uint256 => SaleStruct[]) sales;
     mapping (uint256 => bool) propertyExist;
+    mapping (uint256 => bool) reviewExist;
 
     uint256 private servicePct;
     
     
 
-    function createCharity(
+    function createProperty(
         string memory name,
         string memory image,
         string memory category,
@@ -63,6 +66,7 @@ constructor(uint256 _pct) ERC721 ('HemProperty', 'Hpt') {
             require(bytes(name).length > 0, 'Name cannot be empty');   
             require(bytes(image).length > 0, 'Image cannot be empty' );
             require(bytes(category).length > 0, 'Category cannot be empty');
+            require(bytes(location).length > 0, 'Location cannot be empty');
             require(bytes(description).length > 0, 'Description cannot be empty');
             require(price > 0, 'Price must be greater than zero');
 
@@ -75,13 +79,14 @@ constructor(uint256 _pct) ERC721 ('HemProperty', 'Hpt') {
             property.image = image;
             property.category = category;
             property.description = description;
+            property.location = location;
             property.price = price;
 
             properties[property.id] = property;
             propertyExist[property.id] = true;
     }
 
-    function updateCharity(
+    function updateProperty(
         uint256 id,
         string memory name,
         string memory image,
@@ -94,6 +99,7 @@ constructor(uint256 _pct) ERC721 ('HemProperty', 'Hpt') {
         require(bytes(name).length > 0, 'Name cannot be empty');   
         require(bytes(image).length > 0, 'Image cannot be empty' );
         require(bytes(category).length > 0, 'Category cannot be empty');
+        require(bytes(location).length > 0, 'Location cannot be empty');
         require(bytes(description).length > 0, 'Description cannot be empty');
         require(price > 0, 'Price must be greater than zero');
 
@@ -101,6 +107,7 @@ constructor(uint256 _pct) ERC721 ('HemProperty', 'Hpt') {
         properties[id].category = category;
         properties[id].image = image;
         properties[id].description = description;
+        properties[id].location = location;
         properties[id].price = price;
     }
 
@@ -111,11 +118,19 @@ constructor(uint256 _pct) ERC721 ('HemProperty', 'Hpt') {
         properties[id].deleted =  true;
     }
 
+    function getProperty(uint256 id) public view returns (PropertyStruct memory) {
+            require(propertyExist[id], 'Property does not exist');
+            require(!properties[id].deleted, 'Propery has been deleted');
+
+            return properties[id];
+        }
+
+
     function getAllProperties() public view returns (PropertyStruct[] memory Properties) {
         uint256 availableProperties;
         for (uint256 i = 1; i <= _totalProperties.current(); i++) {
             if (!properties[i].deleted) {
-                availableProperties;
+                availableProperties++;
             }           
         }
 
@@ -129,19 +144,11 @@ constructor(uint256 _pct) ERC721 ('HemProperty', 'Hpt') {
         }
     }
 
-
-        function getProperty(uint256 id) public view returns (PropertyStruct memory) {
-            require(propertyExist[id], 'Property does not exist');
-            require(!properties[id].deleted, 'Propery has been deleted');
-
-            return properties[id];
-        }
-
     function getMyProperty() public view returns (PropertyStruct[] memory Properties) {
        uint256 availableProperties;
        for (uint256 i = 1; i <= _totalProperties.current(); i++) {
         if (!properties[i].deleted && properties[i].owner == msg.sender) {
-            availableProperties;
+            availableProperties++;
         }
        }
 
@@ -172,16 +179,17 @@ constructor(uint256 _pct) ERC721 ('HemProperty', 'Hpt') {
         sales[id].push(sale);
 
 
-        uint256 fee = (msg.value / servicePct) * 100;
+        uint256 fee = (msg.value * servicePct) / 100;
         uint256 payment = (msg.value - fee);
 
 
         payTo(properties[id].owner, payment );
-        payTo(owner(), fee);
+        payTo(0xcF34f424bBFA9105288268504981f9fF6A088C8b, fee);
+        // payTo(owner(), fee);
 
-        properties[id].sold = true;
-        
+        properties[id].sold = true;    
     }
+
 
     function payTo( address to, uint256 price ) internal {
         (bool success, ) =  payable(to).call{value: price} ('');
@@ -197,14 +205,36 @@ constructor(uint256 _pct) ERC721 ('HemProperty', 'Hpt') {
         _totalReviews.increment();
         ReviewStruct memory review;
 
-       review.id = _totalReviews.current;
+       review.id = _totalReviews.current();
        review.propertyId = id;
        review.reviewer = msg.sender;
        review.comment = comment;
 
        reviews[id].push(review);
-
+    //    reviews[review.id] = review;
+       reviewExist[review.id] = true;
     }
 
+    function updateReview( uint256 id, string memory comment ) public {
+        require(ReviewExist[id], 'Review does not exist');
+        require(msg.sender == reviews[id][0].reviewer, 'Only the reviwer can edit review');
+        require(bytes(comment).length > 0, 'Comment can not be empty');
 
+        reviews[id][0].comment = comment;
+    }
+
+    function deleteReview() public {
+        require(msg.sender == reviews[id][0].reviewer || msg.sender == owner(), 'Only the reviwer can delete review');
+        require(reviewExist[id], 'Review does not exist');
+
+        reviews[id].deleted = true;
+    }
+
+    function getReviews( uint256 id ) public view returns (ReviewStruct[] memory Reviews) {
+        return reviews[id];
+    }
+
+    function getSales(uint256 id)  returns (SaleStruct[] memory Sales) {
+        return sales[id];
+    }
 }
